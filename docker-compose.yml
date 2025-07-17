@@ -1,0 +1,141 @@
+version: '3.8'
+
+services:
+  chroma:
+    image: chromadb/chroma:0.5.5
+    container_name: chroma
+    volumes:
+      - chroma-data:/chroma/chroma
+    ports:
+      - "8000:8000"
+    environment:
+      - ALLOW_RESET=true
+      - CHROMA_SERVER_AUTH_PROVIDER=chromadb.auth.impl.NoAuthServerAuthProvider
+      - CHROMA_SERVER_AUTH_CREDENTIALS_PROVIDER=chromadb.auth.impl.NoAuthCredentialsProvider
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/api/v1/heartbeat"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    networks:
+      - booklm_network
+
+  # Using external Ollama service
+  # We'll connect to the existing container
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: notebooklm_backend
+    ports:
+      - "8001:8000"
+    volumes:
+      - ./backend:/app
+      - ./data:/data
+    environment:
+      # Ollama configuration
+      - OLLAMA_HOST=http://host.docker.internal:11434
+      - OLLAMA_TIMEOUT=60
+      - OLLAMA_MAX_RETRIES=3
+      - OLLAMA_RETRY_DELAY=2
+      - OLLAMA_USE_CACHE=true
+      - OLLAMA_CACHE_TTL=3600
+      - OLLAMA_TEMPERATURE=0.7
+      - MODEL_NAME=gemma3:1b-it-qat
+      - EMBEDDING_MODEL=nomic-embed-text
+      - OLLAMA_REQUIRED=true
+      
+      # Chroma configuration
+      - CHROMA_HOST=chroma
+      - CHROMA_PORT=8000
+      
+      # Database configuration
+      - DB_PATH=/data/notebooklm.db
+      
+      # Web search configuration
+      - SEARCH_ENGINE=https://www.google.com/search?q=
+      - SEARCH_USE_CACHE=true
+      - SEARCH_CACHE_TTL=86400
+      
+      # Logging
+      - LOGLEVEL=INFO
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    depends_on:
+      chroma:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 10s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+    restart: unless-stopped
+    networks:
+      - booklm_network
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: notebooklm_frontend
+    ports:
+      - "5173:5173"
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+    environment:
+      - VITE_API_URL=http://localhost:8001
+      - NODE_ENV=development
+      - DEBUG=true
+    depends_on:
+      - backend
+    healthcheck:
+      test: ["CMD", "curl", "-f", "--header", "Connection: close", "http://localhost:5173/"]
+      interval: 30s
+      timeout: 45s
+      retries: 5
+      start_period: 60s
+    restart: unless-stopped
+    networks:
+      - booklm_network
+
+  python-executor:
+    build:
+      context: ./python-executor
+      dockerfile: Dockerfile
+    container_name: notebooklm_python_executor
+    ports:
+      - "3001:3001"
+    volumes:
+      - ./python-executor:/app
+      - ./data:/data
+      - ./python-executor/plots:/app/plots
+      - ./python-executor/sessions:/app/sessions
+      - ./python-executor/tmp:/app/tmp
+    environment:
+      - WORKDIR=/data
+      - DEBUG=true
+      - NODE_ENV=development
+      - PORT=3001
+    depends_on:
+      - backend
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3001/health"]
+      interval: 30s
+      timeout: 20s
+      retries: 5
+      start_period: 30s
+    restart: unless-stopped
+    networks:
+      - booklm_network
+
+volumes:
+  chroma-data:
+  data: {}
+
+networks:
+  booklm_network:
+    external: false
+    driver: bridge

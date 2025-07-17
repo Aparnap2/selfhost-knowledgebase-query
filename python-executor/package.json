@@ -1,0 +1,14 @@
+{
+  "name": "python-executor",
+  "version": "1.0.0",
+  "description": "Python code execution service",
+  "main": "server.js",
+  "type": "module",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "NODE_ENV=development DEBUG=true node server.js"
+  },
+  "dependencies": {
+    "uuid": "^9.0.1"
+  }
+}
