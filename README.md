@@ -1,34 +1,38 @@
-# DeepResearch - Self-Hosted Research Assistant
+# Enhanced Knowledge Base Assistant
 
-DeepResearch is a self-hosted research assistant that allows you to upload documents, search the web, ask questions about your data, and execute Python code with visualizations.
+Enterprise-grade self-hosted AI knowledge base with multi-agent coordination, advanced document processing, and comprehensive security features.
 
-## Features
+## 🚀 Key Features
 
-- **Document Processing**
-  - Upload and process various document types (PDF, DOCX, TXT, etc.)
-  - Extract text and metadata from documents
-  - Vector search across your document collection
+- **🤖 Multi-Agent Architecture**
+  - Specialized agents using LangChain and LlamaIndex
+  - LangGraph coordination for complex queries
+  - Intelligent task routing and result synthesis
 
-- **Web Research**
-  - Search the web for information
-  - Extract content from web pages
-  - Combine web search results with your documents
+- **📄 Enhanced Document Processing**
+  - Docling integration for advanced parsing
+  - LlamaIndex for semantic understanding
+  - Complex document structure preservation
 
-- **AI-Powered Assistance**
-  - Ask questions about your documents and web content
-  - Get contextual answers with citations
-  - Streaming responses for better user experience
+- **🔐 Enterprise Security**
+  - Role-based access control (RBAC)
+  - Data encryption at rest
+  - Document sensitivity levels
 
-- **Python Code Execution**
-  - Write and execute Python code
-  - Create data visualizations with matplotlib
-  - Persistent sessions for multi-step analysis
-  - Support for common data science libraries
+- **💾 Persistent Memory**
+  - Conversation history preservation
+  - User preference learning
+  - Context-aware responses
 
-- **Modern UI**
-  - Responsive design for desktop and mobile
-  - Real-time feedback and progress indicators
-  - Dark mode support
+- **📊 Monitoring & Analytics**
+  - Langfuse LLM call tracking
+  - Performance metrics
+  - System health monitoring
+
+- **🌐 Complete Offline Mode**
+  - Full offline functionality
+  - Local Ollama inference
+  - Automatic connectivity detection
 
 ## Prerequisites
 
@@ -66,10 +70,11 @@ DeepResearch is a self-hosted research assistant that allows you to upload docum
 ## Services
 
 - **Frontend**: React application with TypeScript (port 5173)
-- **Backend**: FastAPI server with streaming support (port 8001)
-- **Chroma**: Vector database for document and web content storage (port 8000)
-- **Python Executor**: Enhanced code execution service with session support (port 3001)
-- **Ollama**: LLM inference service (port 11434)
+- **Backend**: FastAPI server with multi-agent coordination (port 8001)
+- **ChromaDB**: Vector database with LlamaIndex integration (port 8000)
+- **Python Executor**: Code execution with session support (port 3001)
+- **Langfuse**: LLM monitoring and analytics (port 3000)
+- **Ollama**: Local LLM inference service (port 11434)
 
 ## Configuration
 
@@ -113,14 +118,24 @@ cd frontend && npm run dev
 cd python-executor && npm run dev
 ```
 
+## Recent Updates
+
+- ✅ Multi-agent architecture with LangGraph
+- ✅ Enhanced document processing with Docling
+- ✅ RBAC system with granular permissions
+- ✅ Conversation memory and user preferences
+- ✅ Langfuse monitoring integration
+- ✅ Basic encryption service
+- ✅ Complete offline mode support
+
 ## Roadmap
 
+- [ ] Frontend admin panels for user/role management
+- [ ] TLS configuration for data in transit
+- [ ] Comprehensive test suite
+- [ ] Performance optimization
+- [ ] Advanced agent personalities
 - [ ] Knowledge graph visualization
-- [ ] Support for more document types (PPT, Excel, etc.)
-- [ ] OCR for images and scanned documents
-- [ ] Multi-user support with authentication
-- [ ] Plugin system for extensibility
-- [ ] Workflow automation
 
 ## License
 

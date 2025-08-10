@@ -209,6 +209,8 @@ def get_db():
 
 @app.on_event("startup")
 async def startup_event():
+    global agent_coordinator
+    
     # Initialize the Ollama client
     await ollama_client.initialize()
     logger.info(f"Initialized Ollama client with host: {OLLAMA_HOST}")
@@ -217,6 +219,14 @@ async def startup_event():
     # Initialize web search client
     await web_search.initialize()
     logger.info("Initialized web search client")
+    
+    # Initialize multi-agent coordinator
+    try:
+        agent_coordinator = SimpleAgentCoordinator(OLLAMA_HOST, MODEL_NAME)
+        logger.info("Initialized multi-agent coordinator")
+    except Exception as e:
+        logger.warning(f"Failed to initialize agent coordinator: {str(e)}")
+        agent_coordinator = None
     
     # Initialize rate limiter if Redis URL is provided
     redis_url = os.getenv("REDIS_URL")
@@ -250,6 +260,10 @@ from document_processing.routes import router as metadata_router
 from conversation.routes import router as conversation_router
 from config.routes import router as config_router
 
+# Import multi-agent coordinator
+from agents.coordinator import MultiAgentCoordinator
+from agents.simple_agents import SimpleAgentCoordinator
+
 # Include routers
 app.include_router(auth_router)
 app.include_router(metadata_router)
@@ -270,6 +284,9 @@ faiss_index = faiss.IndexFlatL2(dimension)
 
 # Initialize web search client
 web_search = WebSearch()
+
+# Initialize multi-agent coordinator
+agent_coordinator = None
 
 # SQLite setup
 conn = sqlite3.connect(DB_PATH, check_same_thread=False)
@@ -437,7 +454,33 @@ async def upload_file(
         # Generate embedding
         embedding = await get_embedding(text)
         
-        # Extract metadata using our new metadata extraction service
+        # Try enhanced document processing first
+        try:
+            from document_processing.enhanced_processor import EnhancedDocumentProcessor
+            enhanced_processor = EnhancedDocumentProcessor()
+            
+            # Create temporary file
+            with tempfile.NamedTemporaryFile(delete=False) as temp_file:
+                temp_file.write(content)
+                temp_path = temp_file.name
+            
+            # Process with enhanced processor
+            enhanced_result = await enhanced_processor.process_document(file.filename, content)
+            
+            if enhanced_result["processing_success"]:
+                text = enhanced_result["structured_content"]["text"]
+                logger.info(f"Enhanced processing successful for {file.filename}")
+            else:
+                logger.warning(f"Enhanced processing failed, using fallback: {enhanced_result.get('error')}")
+            
+            # Clean up temp file
+            if os.path.exists(temp_path):
+                os.unlink(temp_path)
+                
+        except Exception as e:
+            logger.warning(f"Enhanced processing not available: {str(e)}")
+        
+        # Extract metadata using existing service
         from document_processing.metadata import MetadataExtractor
         
         # Create a temporary file to extract metadata
@@ -581,7 +624,21 @@ async def query(
             except Exception as e:
                 logger.error(f"Error including web results: {str(e)}")
         
-        # Generate response with Ollama
+        # Try multi-agent processing first
+        if agent_coordinator:
+            try:
+                agent_result = await agent_coordinator.process_query(request.query, user.get("username", "anonymous"))
+                if agent_result.get("response"):
+                    return {
+                        "response": agent_result["response"],
+                        "sources": agent_result.get("sources", sources),
+                        "agent_used": agent_result.get("agent_used", "multi_agent"),
+                        "visualization": visualization
+                    }
+            except Exception as e:
+                logger.warning(f"Agent coordinator failed, falling back to direct processing: {str(e)}")
+        
+        # Fallback to original processing
         document_context = "\n".join([src["snippet"] for src in sources])
         web_context = "\n\n".join([f"Web: {r['title']}\nURL: {r['url']}\n{r['content']}" for r in web_results]) if web_results else ""
         
