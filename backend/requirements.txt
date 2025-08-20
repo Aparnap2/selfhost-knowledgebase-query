@@ -20,6 +20,7 @@ fastapi-limiter==0.1.5
 redis==5.0.1
 pytest==7.4.3
 pytest-cov==4.1.0
+pytest-asyncio==0.21.1
 loguru==0.7.2
 starlette-csrf==1.4.3
 secure==0.3.0
@@ -33,11 +34,35 @@ pytesseract==0.3.10
 requests==2.31.0
 crawl4ai==0.1.5
 httpx==0.27.0
+
 # Multi-agent and enhanced processing
 llamaindex==0.11.20
 docling==2.5.2
 langchain==0.3.7
 langgraph==0.2.45
 langfuse==2.56.0
-# Encryption
+
+# Security & Authentication
 cryptography==43.0.1
+pyotp==2.9.0
+qrcode[pil]==7.4.2
+bcrypt==4.1.2
+
+# GDPR & Privacy
+spacy==3.7.2
+en-core-web-sm @ https://github.com/explosion/spacy-models/releases/download/en_core_web_sm-3.7.1/en_core_web_sm-3.7.1-py3-none-any.whl
+
+# Monitoring & Metrics
+prometheus-client==0.19.0
+psutil==5.9.6
+
+# Database
+sqlalchemy==2.0.23
+alembic==1.13.0
+
+# Additional enterprise dependencies
+python-dotenv==1.0.0
+email-validator==2.1.0
+phonenumbers==8.13.25
+schedule==1.2.0
+watchdog==3.0.0

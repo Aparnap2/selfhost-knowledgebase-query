@@ -178,7 +178,7 @@ class ConversationMemory(Base):
         }
 
 class UserSession(Base):
-    """User session tracking for security and personalization."""
+    """Enhanced user session tracking for security and personalization."""
     __tablename__ = 'user_sessions'
     
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
@@ -188,6 +188,8 @@ class UserSession(Base):
     user_agent = Column(Text, nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     expires_at = Column(DateTime(timezone=True), nullable=False)
+    last_activity = Column(DateTime(timezone=True), nullable=True)
+    ended_at = Column(DateTime(timezone=True), nullable=True)
     is_active = Column(Boolean, default=True, nullable=False)
     
     # Relationships
@@ -206,7 +208,112 @@ class UserSession(Base):
             'user_agent': self.user_agent,
             'created_at': self.created_at.isoformat() if self.created_at else None,
             'expires_at': self.expires_at.isoformat() if self.expires_at else None,
+            'last_activity': self.last_activity.isoformat() if self.last_activity else None,
+            'ended_at': self.ended_at.isoformat() if self.ended_at else None,
             'is_active': self.is_active
+        }
+
+class MFADevice(Base):
+    """Multi-Factor Authentication device for users."""
+    __tablename__ = 'mfa_devices'
+    
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    user_id = Column(UUID(as_uuid=True), ForeignKey('users.id'), nullable=False)
+    device_type = Column(String(50), nullable=False)  # 'totp', 'sms', 'email'
+    secret = Column(String(255), nullable=True)  # TOTP secret
+    phone_number = Column(String(20), nullable=True)  # For SMS
+    is_verified = Column(Boolean, default=False, nullable=False)
+    backup_codes = Column(JSON, nullable=True)  # Hashed backup codes
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    verified_at = Column(DateTime(timezone=True), nullable=True)
+    last_used = Column(DateTime(timezone=True), nullable=True)
+    
+    # Relationships
+    user = relationship("User", backref="mfa_devices")
+    
+    def __repr__(self):
+        return f"<MFADevice(user_id='{self.user_id}', device_type='{self.device_type}')>"
+    
+    def to_dict(self) -> Dict[str, Any]:
+        """Convert MFA device to dictionary representation."""
+        return {
+            'id': str(self.id),
+            'user_id': str(self.user_id),
+            'device_type': self.device_type,
+            'is_verified': self.is_verified,
+            'created_at': self.created_at.isoformat() if self.created_at else None,
+            'verified_at': self.verified_at.isoformat() if self.verified_at else None,
+            'last_used': self.last_used.isoformat() if self.last_used else None
+        }
+
+class ConsentRecord(Base):
+    """Records user consent for GDPR compliance."""
+    __tablename__ = 'consent_records'
+    
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    user_id = Column(UUID(as_uuid=True), ForeignKey('users.id'), nullable=False)
+    consent_type = Column(String(50), nullable=False)  # Type of consent
+    purpose = Column(String(100), nullable=False)  # Purpose for data processing
+    granted = Column(Boolean, nullable=False)  # Whether consent was granted
+    metadata = Column(JSON, default=dict)  # Additional metadata
+    ip_address = Column(String(45), nullable=True)  # IP address when consent given
+    user_agent = Column(Text, nullable=True)  # User agent when consent given
+    recorded_at = Column(DateTime(timezone=True), server_default=func.now())
+    
+    # Relationships
+    user = relationship("User", backref="consent_records")
+    
+    def __repr__(self):
+        return f"<ConsentRecord(user_id='{self.user_id}', consent_type='{self.consent_type}', granted={self.granted})>"
+    
+    def to_dict(self) -> Dict[str, Any]:
+        """Convert consent record to dictionary representation."""
+        return {
+            'id': str(self.id),
+            'user_id': str(self.user_id),
+            'consent_type': self.consent_type,
+            'purpose': self.purpose,
+            'granted': self.granted,
+            'metadata': self.metadata,
+            'ip_address': self.ip_address,
+            'user_agent': self.user_agent,
+            'recorded_at': self.recorded_at.isoformat() if self.recorded_at else None
+        }
+
+class AuditLog(Base):
+    """Comprehensive audit logging for compliance."""
+    __tablename__ = 'audit_logs'
+    
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    user_id = Column(UUID(as_uuid=True), ForeignKey('users.id'), nullable=True)
+    action = Column(String(100), nullable=False)  # Action performed
+    resource_type = Column(String(50), nullable=True)  # Type of resource affected
+    resource_id = Column(String(255), nullable=True)  # ID of resource affected
+    details = Column(JSON, default=dict)  # Additional details
+    ip_address = Column(String(45), nullable=True)  # Source IP address
+    user_agent = Column(Text, nullable=True)  # User agent string
+    success = Column(Boolean, nullable=False, default=True)  # Whether action succeeded
+    timestamp = Column(DateTime(timezone=True), server_default=func.now())
+    
+    # Relationships
+    user = relationship("User", backref="audit_logs")
+    
+    def __repr__(self):
+        return f"<AuditLog(action='{self.action}', user_id='{self.user_id}', timestamp='{self.timestamp}')>"
+    
+    def to_dict(self) -> Dict[str, Any]:
+        """Convert audit log to dictionary representation."""
+        return {
+            'id': str(self.id),
+            'user_id': str(self.user_id) if self.user_id else None,
+            'action': self.action,
+            'resource_type': self.resource_type,
+            'resource_id': self.resource_id,
+            'details': self.details,
+            'ip_address': self.ip_address,
+            'user_agent': self.user_agent,
+            'success': self.success,
+            'timestamp': self.timestamp.isoformat() if self.timestamp else None
         }
 
 # Database configuration and session management
