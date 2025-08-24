@@ -7,7 +7,7 @@ from sqlalchemy.orm import Session
 from typing import Dict, Any, List
 
 from ..auth.database import User
-from ..auth.rbac import get_current_user
+from ..auth.rbac import get_current_user as rbac_get_current_user
 from .preferences import UserPreferenceManager
 
 # Create API router
@@ -33,7 +33,7 @@ def get_db():
 @router.get("")
 async def get_user_preferences(
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(rbac_get_current_user)
 ):
     """
     Get user preferences.
@@ -54,7 +54,7 @@ async def get_user_preferences(
 async def update_user_preferences(
     preferences: Dict[str, Any] = Body(...),
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(rbac_get_current_user)
 ):
     """
     Update user preferences.
@@ -90,7 +90,7 @@ async def update_user_preferences(
 @router.get("/communication-styles")
 async def get_communication_styles(
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(rbac_get_current_user)
 ):
     """
     Get available communication styles.
@@ -108,7 +108,7 @@ async def get_communication_styles(
 @router.get("/expertise-levels")
 async def get_expertise_levels(
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(rbac_get_current_user)
 ):
     """
     Get available expertise levels.

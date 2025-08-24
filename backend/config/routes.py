@@ -10,7 +10,7 @@ from pydantic import BaseModel
 from ..auth.database import User
 from ..auth.middleware import PermissionChecker
 from ..auth.models import Permission
-from ..auth.rbac import get_current_user
+from ..auth.rbac import get_current_user as rbac_get_current_user
 from .offline_mode import OfflineModeManager
 from .model_checker import ModelChecker
 
@@ -47,7 +47,7 @@ class OfflineModeUpdate(BaseModel):
 
 @router.get("/offline-mode")
 async def get_offline_mode(
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(rbac_get_current_user)
 ):
     """
     Get current offline mode status.
@@ -88,7 +88,7 @@ async def set_offline_mode(
 
 @router.get("/ollama-status")
 async def check_ollama_status(
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(rbac_get_current_user)
 ):
     """
     Check Ollama availability.
@@ -109,7 +109,7 @@ async def check_ollama_status(
 @router.get("/model-status/{model_name}")
 async def check_model_status(
     model_name: str,
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(rbac_get_current_user)
 ):
     """
     Check if a specific model is available in Ollama.
@@ -132,7 +132,7 @@ async def check_model_status(
 @router.get("/models")
 async def get_models_status(
     force_check: bool = False,
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(rbac_get_current_user)
 ):
     """
     Get status of all required models.

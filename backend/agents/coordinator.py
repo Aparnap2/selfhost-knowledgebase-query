@@ -42,44 +42,54 @@ class MultiAgentCoordinator:
         
         return workflow.compile()
     
-    async def process_query(self, query: str, user_id: str) -> Dict[str, Any]:
-        """Process a query through the multi-agent workflow."""
+    async def process_query(self, query: str, user_id: str, allowed_doc_ids: List[str] | None = None) -> Dict[str, Any]:
+        """Process a query through the multi-agent workflow with optional RBAC doc filter."""
         initial_state = AgentState(
             query=query,
             user_id=user_id,
             documents=[],
             analysis_results={},
-            final_response=""
+            final_response="",
         )
+        if allowed_doc_ids:
+            initial_state["allowed_doc_ids"] = allowed_doc_ids
         
         result = await self.workflow.ainvoke(initial_state)
         return result
     
     async def _document_search_agent(self, state: AgentState) -> AgentState:
-        """Document search agent using existing ChromaDB."""
-        # Use existing document search logic
+        """Document search agent using existing ChromaDB with optional RBAC filtering."""
         from ..main import collection, get_embedding
         
+        # Generate embedding for query
         query_embedding = await get_embedding(state["query"])
-        results = collection.query(
+        
+        # Fetch more results then filter by RBAC if provided
+        raw = collection.query(
             query_embeddings=[query_embedding],
-            n_results=5,
-            include=["documents", "metadatas", "distances"]
+            n_results=25,
+            include=["documents", "metadatas", "distances", "ids"],
         )
         
-        state["documents"] = [
-            {
+        docs = []
+        allowed_ids = set(state.get("allowed_doc_ids", []) or [])
+        for doc, meta, dist, doc_id in zip(
+            raw.get("documents", [[]])[0],
+            raw.get("metadatas", [[]])[0],
+            raw.get("distances", [[]])[0],
+            raw.get("ids", [[]])[0],
+        ):
+            if allowed_ids and doc_id not in allowed_ids:
+                continue
+            docs.append({
+                "id": doc_id,
                 "content": doc,
                 "metadata": meta,
-                "distance": dist
-            }
-            for doc, meta, dist in zip(
-                results["documents"][0],
-                results["metadatas"][0], 
-                results["distances"][0]
-            )
-        ]
+                "distance": dist,
+            })
         
+        # Trim to top 5 after filtering
+        state["documents"] = docs[:5]
         return state
     
     async def _analysis_agent(self, state: AgentState) -> AgentState:

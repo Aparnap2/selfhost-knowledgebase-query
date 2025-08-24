@@ -12,7 +12,7 @@ import uuid
 
 from .database import User, Role, user_roles, DatabaseManager
 from .models import Permission, DocumentSensitivity, Department
-from .rbac import RBACManager, create_access_token, get_current_user
+from .rbac import RBACManager, create_access_token, get_current_user as rbac_get_current_user
 from .middleware import PermissionChecker
 
 # Create API router
@@ -196,7 +196,7 @@ async def login(
 
 @router.get("/me", response_model=UserResponse)
 async def get_current_user_info(
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(rbac_get_current_user),
     db: Session = Depends(get_db)
 ):
     """
@@ -602,7 +602,7 @@ async def get_roles(
     skip: int = 0,
     limit: int = 100,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(rbac_get_current_user)
 ):
     """
     Get list of roles.
@@ -638,7 +638,7 @@ async def get_roles(
 async def get_role(
     role_id: str,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(rbac_get_current_user)
 ):
     """
     Get role by ID.
@@ -815,7 +815,7 @@ async def delete_role(
 
 @router.get("/permissions", response_model=List[PermissionResponse])
 async def get_permissions(
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(rbac_get_current_user)
 ):
     """
     Get list of all available permissions.
@@ -902,7 +902,7 @@ async def get_permissions(
 
 @router.get("/sensitivity-levels", response_model=List[str])
 async def get_sensitivity_levels(
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(rbac_get_current_user)
 ):
     """
     Get list of all document sensitivity levels.
@@ -917,7 +917,7 @@ async def get_sensitivity_levels(
 
 @router.get("/departments", response_model=List[str])
 async def get_departments(
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(rbac_get_current_user)
 ):
     """
     Get list of all departments.

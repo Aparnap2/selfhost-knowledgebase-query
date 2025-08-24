@@ -16,7 +16,7 @@ from datetime import datetime
 
 from ..auth.database import User, DocumentMetadata
 from ..auth.models import Permission, DocumentSensitivity, Department
-from ..auth.rbac import get_current_user
+from ..auth.rbac import get_current_user as rbac_get_current_user
 from ..auth.middleware import PermissionChecker
 from .metadata import MetadataExtractor
 
@@ -317,7 +317,7 @@ async def get_all_document_metadata(
     department: Optional[str] = None,
     tag: Optional[str] = None,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(rbac_get_current_user),
     accessible_docs: List[str] = Depends(permission_checker.filter_documents_for_user(Permission.DOCUMENT_READ))
 ):
     """

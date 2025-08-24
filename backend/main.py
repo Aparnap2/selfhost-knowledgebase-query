@@ -30,6 +30,10 @@ import traceback
 import secure
 import tempfile
 from sqlalchemy.orm import Session
+from auth.rbac import get_current_user as rbac_get_current_user, RBACManager
+from auth.database import User
+from document_processing.access_control import MetadataAccessControl
+from monitoring.metrics import MetricsCollector, PerformanceTracker, generate_latest, CONTENT_TYPE_LATEST
 
 # Configure loguru logger
 logger.remove()
@@ -50,7 +54,7 @@ ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 60
 
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
-oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/login")
+oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/auth/login")
 
 # In-memory demo user
 fake_users_db = {
@@ -222,7 +226,7 @@ async def startup_event():
     
     # Initialize multi-agent coordinator
     try:
-        agent_coordinator = SimpleAgentCoordinator(OLLAMA_HOST, MODEL_NAME)
+        agent_coordinator = MultiAgentCoordinator(OLLAMA_HOST, MODEL_NAME)
         logger.info("Initialized multi-agent coordinator")
     except Exception as e:
         logger.warning(f"Failed to initialize agent coordinator: {str(e)}")
@@ -376,17 +380,37 @@ async def get_embedding(text: str) -> List[float]:
     
     # Fallback to mock embeddings if Ollama is not available and not required
     logger.warning("Falling back to mock embeddings")
-    return get_mock_embedding(text)
+    return await get_mock_embedding(text)
 
 @app.get("/health")
 async def health():
     # Always return healthy for health checks
     return {"status": "healthy"}
 
+@app.get("/metrics")
+def metrics_endpoint():
+    # Expose Prometheus metrics
+    data = generate_latest()
+    return Response(content=data, media_type=CONTENT_TYPE_LATEST)
+
 @app.get("/files")
-async def get_files(user: dict = Depends(get_current_user)):
+async def get_files(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(rbac_get_current_user)
+):
     try:
-        cursor.execute("SELECT id, filename FROM documents")
+        # Compute allowed document IDs
+        rbac = RBACManager(db)
+        permission_docs = rbac.filter_documents_by_permission(str(current_user.id))
+        allowed_doc_ids = MetadataAccessControl(db).filter_documents_by_metadata(str(current_user.id), permission_docs)
+        
+        if not allowed_doc_ids:
+            return []
+        
+        # Fetch only allowed documents
+        placeholders = ",".join(["?"] * len(allowed_doc_ids))
+        query = f"SELECT id, filename FROM documents WHERE id IN ({placeholders})"
+        cursor.execute(query, allowed_doc_ids)
         files = [{"id": row[0], "filename": row[1]} for row in cursor.fetchall()]
         return files
     except Exception as e:
@@ -396,7 +420,7 @@ async def get_files(user: dict = Depends(get_current_user)):
 @app.post("/upload")
 async def upload_file(
     file: UploadFile = File(...), 
-    user: dict = Depends(get_current_user),
+    current_user: User = Depends(rbac_get_current_user),
     db: Session = Depends(get_db),
     rate_limiter: None = Depends(RateLimiter(times=10, seconds=60)) # 10 uploads per minute
 ):
@@ -549,11 +573,17 @@ class StreamingQueryRequest(QueryRequest):
 
 @app.post("/query")
 async def query(
-    request: StreamingQueryRequest, 
-    user: dict = Depends(get_current_user),
+    request: StreamingQueryRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(rbac_get_current_user),
     rate_limiter: None = Depends(RateLimiter(times=5, seconds=60)) # 5 requests per minute
 ):
     try:
+        # Compute allowed document IDs via RBAC + metadata access
+        rbac = RBACManager(db)
+        permission_docs = rbac.filter_documents_by_permission(str(current_user.id))
+        allowed_doc_ids = MetadataAccessControl(db).filter_documents_by_metadata(str(current_user.id), permission_docs)
+
         # Generate query embedding
         query_embedding = await get_embedding(request.query)
         
@@ -561,7 +591,7 @@ async def query(
         results = collection.query(
             query_embeddings=[query_embedding],
             n_results=request.top_k,
-            include=["documents", "metadatas", "distances"]
+            include=["documents", "metadatas", "distances", "ids"]
         )
         
         # Helper to format sources
@@ -575,11 +605,17 @@ async def query(
                 "distance": dist
             }
 
-        # Retrieve sources
-        sources = [format_source(id, doc, meta, dist)
-                   for id, doc, meta, dist in zip(
-                        results["ids"][0], results["documents"][0], results["metadatas"][0], results["distances"][0]
-                    )]
+        # Retrieve sources with RBAC filtering
+        sources = []
+        for id, doc, meta, dist in zip(
+            results.get("ids", [[]])[0],
+            results.get("documents", [[]])[0],
+            results.get("metadatas", [[]])[0],
+            results.get("distances", [[]])[0],
+        ):
+            if allowed_doc_ids and id not in allowed_doc_ids:
+                continue
+            sources.append(format_source(id, doc, meta, dist))
         
         # Check if we should include web search results
         include_web = any(keyword in request.query.lower() for keyword in ["search", "web", "internet", "online", "find"])
@@ -627,13 +663,21 @@ async def query(
         # Try multi-agent processing first
         if agent_coordinator:
             try:
-                agent_result = await agent_coordinator.process_query(request.query, user.get("username", "anonymous"))
-                if agent_result.get("response"):
+                agent_result = await agent_coordinator.process_query(
+                    request.query,
+                    str(current_user.id) if hasattr(current_user, 'id') else current_user.get("username", "anonymous"),
+                    allowed_doc_ids=allowed_doc_ids,
+                )
+                # MultiAgentCoordinator returns final_response in state
+                if agent_result.get("final_response"):
                     return {
-                        "response": agent_result["response"],
-                        "sources": agent_result.get("sources", sources),
-                        "agent_used": agent_result.get("agent_used", "multi_agent"),
-                        "visualization": visualization
+                        "response": agent_result["final_response"],
+                        "sources": [
+                            {"id": d.get("id"), "filename": d.get("metadata", {}).get("filename", "Unknown"), "snippet": d.get("content", "")[:200], "distance": d.get("distance")}
+                            for d in agent_result.get("documents", [])
+                        ] or sources,
+                        "agent_used": "multi_agent",
+                        "visualization": visualization,
                     }
             except Exception as e:
                 logger.warning(f"Agent coordinator failed, falling back to direct processing: {str(e)}")
@@ -753,7 +797,7 @@ async def generate_visualization(context: str):
 @app.post("/execute")
 async def execute_code(
     request: ExecuteCodeRequest, 
-    user: dict = Depends(get_current_user),
+    current_user: User = Depends(rbac_get_current_user),
     rate_limiter: None = Depends(RateLimiter(times=5, seconds=60)) # 5 code executions per minute
 ):
     code_file = f"/data/{uuid.uuid4()}.py"
@@ -786,7 +830,7 @@ class WebSearchRequest(BaseModel):
 @app.post("/search")
 async def search_web(
     request: WebSearchRequest,
-    user: dict = Depends(get_current_user),
+    current_user: User = Depends(rbac_get_current_user),
     rate_limiter: None = Depends(RateLimiter(times=5, seconds=60))  # 5 searches per minute
 ):
     try:
@@ -843,7 +887,7 @@ class WebContentRequest(BaseModel):
 @app.post("/extract")
 async def extract_web_content(
     request: WebContentRequest,
-    user: dict = Depends(get_current_user),
+    current_user: User = Depends(rbac_get_current_user),
     rate_limiter: None = Depends(RateLimiter(times=10, seconds=60))  # 10 extractions per minute
 ):
     try:

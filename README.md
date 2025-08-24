@@ -128,6 +128,37 @@ cd python-executor && npm run dev
 - ✅ Basic encryption service
 - ✅ Complete offline mode support
 
+## Authentication & RBAC
+
+- **JWT login**: Acquire token via `POST /auth/login` (form fields: `username`, `password`).
+- **Use token**: Include `Authorization: Bearer <token>` in API requests.
+- **RBAC enforcement**:
+  - Endpoints now depend on an RBAC-aware user dependency and enforce document access using both permissions and metadata.
+  - Key protected routes include: `/upload`, `/execute`, `/search`, `/extract`, `/documents/*`, `/config/*`, and selected `/auth/*` info endpoints.
+
+Examples:
+
+```bash
+# 1) Login to get token
+curl -s -X POST \
+  -H "Content-Type: application/x-www-form-urlencoded" \
+  -d 'username=admin&password=admin' \
+  http://localhost:8001/auth/login | jq -r .access_token
+
+# 2) List accessible document metadata (RBAC + metadata filtering applied)
+TOKEN="<paste_access_token>"
+curl -s -H "Authorization: Bearer $TOKEN" \
+  "http://localhost:8001/documents/metadata?limit=20"
+
+# 3) Check Ollama status (requires authentication)
+curl -s -H "Authorization: Bearer $TOKEN" \
+  http://localhost:8001/config/ollama-status
+```
+
+Notes:
+- **Document access** is determined by user roles, permissions, sensitivity level, department, and explicit user/role allowlists.
+- **Admin users** bypass permission checks where appropriate.
+
 ## Roadmap
 
 - [ ] Frontend admin panels for user/role management

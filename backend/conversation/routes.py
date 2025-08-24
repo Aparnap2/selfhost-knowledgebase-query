@@ -11,7 +11,7 @@ import uuid
 from ..auth.database import User, ConversationMemory
 from ..auth.middleware import PermissionChecker
 from ..auth.models import Permission
-from ..auth.rbac import get_current_user
+from ..auth.rbac import get_current_user as rbac_get_current_user
 from .memory_manager import ConversationMemoryManager
 from .preference_routes import router as preference_router
 
@@ -45,7 +45,7 @@ permission_checker = PermissionChecker(get_db)
 async def create_conversation(
     title: Optional[str] = Body(None),
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(rbac_get_current_user)
 ):
     """
     Create a new conversation memory.
@@ -70,7 +70,7 @@ async def create_conversation(
 async def get_user_conversations(
     limit: int = Query(10, ge=1, le=100),
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(rbac_get_current_user)
 ):
     """
     Get conversations for the current user.
@@ -92,7 +92,7 @@ async def get_user_conversations(
 async def get_conversation(
     session_id: str = Path(...),
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(rbac_get_current_user)
 ):
     """
     Get a specific conversation memory.
@@ -131,7 +131,7 @@ async def add_message(
     message: Dict[str, Any] = Body(...),
     session_id: str = Path(...),
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(rbac_get_current_user)
 ):
     """
     Add a message to a conversation.
@@ -187,7 +187,7 @@ async def update_context(
     context: Dict[str, Any] = Body(...),
     session_id: str = Path(...),
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(rbac_get_current_user)
 ):
     """
     Update conversation context.
@@ -236,7 +236,7 @@ async def update_preferences(
     preferences: Dict[str, Any] = Body(...),
     session_id: str = Path(...),
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(rbac_get_current_user)
 ):
     """
     Update user preferences for a conversation.
@@ -284,7 +284,7 @@ async def update_preferences(
 async def delete_conversation(
     session_id: str = Path(...),
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(rbac_get_current_user)
 ):
     """
     Delete a conversation.
